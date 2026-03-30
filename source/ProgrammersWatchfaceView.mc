@@ -145,6 +145,84 @@ class ProgrammersWatchfaceView extends WatchUi.WatchFace {
         return names[idx];
     }
 
+    private function _isLeapYear(year) {
+        if ((year % 4) != 0) {
+            return false;
+        }
+
+        if ((year % 100) != 0) {
+            return true;
+        }
+
+        return ((year % 400) == 0);
+    }
+
+    private function _dayOfYear(year, month, day) {
+        var daysBeforeMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        var doy = daysBeforeMonth[month - 1] + day;
+
+        if (_isLeapYear(year) && month > 2) {
+            doy += 1;
+        }
+
+        return doy;
+    }
+
+    // Sakamoto weekday: 0=Sunday .. 6=Saturday
+    private function _weekdaySunday0(year, month, day) {
+        var offsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+        var y = year;
+
+        if (month < 3) {
+            y -= 1;
+        }
+
+        var dow = y
+            + Math.floor(y / 4.0).toLong()
+            - Math.floor(y / 100.0).toLong()
+            + Math.floor(y / 400.0).toLong()
+            + offsets[month - 1]
+            + day;
+
+        return dow % 7;
+    }
+
+    // ISO weekday: Monday=1 .. Sunday=7
+    private function _isoWeekday(year, month, day) {
+        var dow = _weekdaySunday0(year, month, day);
+        if (dow == 0) {
+            return 7;
+        }
+        return dow;
+    }
+
+    private function _isoWeeksInYear(year) {
+        var jan1IsoDow = _isoWeekday(year, 1, 1);
+
+        if (jan1IsoDow == 4 || (jan1IsoDow == 3 && _isLeapYear(year))) {
+            return 53;
+        }
+
+        return 52;
+    }
+
+    private function _isoWeekNumber(year, month, day) {
+        var doy = _dayOfYear(year, month, day);
+        var isoDow = _isoWeekday(year, month, day);
+        var week = Math.floor(((doy - isoDow + 10).toFloat()) / 7.0).toLong();
+
+        if (week < 1) {
+            return _isoWeeksInYear(year - 1);
+        }
+
+        var weeksThisYear = _isoWeeksInYear(year);
+        if (week > weeksThisYear) {
+            return 1;
+        }
+
+        return week;
+    }
+
     private function _drawLabelValueCenter(dc as Dc, cx, y, label, value, font) {
         var labelStr = label + " ";
         var labelW = dc.getTextWidthInPixels(labelStr, font);
@@ -277,6 +355,9 @@ class ProgrammersWatchfaceView extends WatchUi.WatchFace {
         var offH = offsetMins / 60;
         var offM = offsetMins % 60;
         var offsetStr = offsetSign + _fmt2(offH) + _fmt2(offM);
+        var timeStr = _fmt2(clock.hour) + ":" +
+                      _fmt2(clock.min) + ":" +
+                      _fmt2(clock.sec);
 
         // ActivityMonitor data
         var actInfo = ActivityMonitor.getInfo();
@@ -423,14 +504,26 @@ class ProgrammersWatchfaceView extends WatchUi.WatchFace {
 
         var y = marginTop + row * rowH;
         var dateFont = Graphics.FONT_XTINY;
+        var weekFont = Graphics.FONT_SYSTEM_XTINY;
 
         var dowStr = _dow3(gInfo.day_of_week);
         if (dowStr.length() >= 1) {
             dowStr = dowStr.substring(0,1).toUpper() + dowStr.substring(1,3);
         }
 
+        var gapStr = " ";
+        var weekStr = "W" + _fmt2(_isoWeekNumber(gInfo.year, gInfo.month, gInfo.day));
+        var dowW = dc.getTextWidthInPixels(dowStr, dateFont);
+        var gapW = dc.getTextWidthInPixels(gapStr, dateFont);
+        var weekW = dc.getTextWidthInPixels(weekStr, weekFont);
+        var topRowX = (w - (dowW + gapW + weekW)) / 2;
+
+        dc.setColor(COLOR_MONTH, Graphics.COLOR_BLACK);
+        dc.drawText(topRowX, y, dateFont, dowStr, Graphics.TEXT_JUSTIFY_LEFT);
+
         dc.setColor(COLOR_LABEL, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, y, dateFont, dowStr, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(topRowX + dowW, y, dateFont, gapStr, Graphics.TEXT_JUSTIFY_LEFT);
+        dc.drawText(topRowX + dowW + gapW, y + 1, weekFont, weekStr, Graphics.TEXT_JUSTIFY_LEFT);
         row += 1;
 
         // ---------- Row 2: YYYY-MM-DD ----------
@@ -441,16 +534,16 @@ class ProgrammersWatchfaceView extends WatchUi.WatchFace {
         var monthStr = _fmt2(gInfo.month);
         var dayStr   = _fmt2(gInfo.day);
         var dashStr  = "-";
+        var doyStr   = " D" + _fmt3(_dayOfYear(gInfo.year, gInfo.month, gInfo.day));
+        var doyGapPx = 4;
 
         var yearW  = dc.getTextWidthInPixels(yearStr, dateFont);
         var monthW = dc.getTextWidthInPixels(monthStr, dateFont);
         var dayW   = dc.getTextWidthInPixels(dayStr, dateFont);
         var dashW  = dc.getTextWidthInPixels(dashStr, dateFont);
 
-        var totalWidth =
-            yearW + dashW + monthW + dashW + dayW;
-
-        var x = (w - totalWidth) / 2;
+        var timeLeftX = (w - dc.getTextWidthInPixels(timeStr, Graphics.FONT_LARGE)) / 2;
+        var x = timeLeftX;
 
         dc.setColor(COLOR_YEAR, Graphics.COLOR_BLACK);
         dc.drawText(x, y, dateFont, yearStr, Graphics.TEXT_JUSTIFY_LEFT);
@@ -470,15 +563,17 @@ class ProgrammersWatchfaceView extends WatchUi.WatchFace {
 
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.drawText(x, y, dateFont, dayStr, Graphics.TEXT_JUSTIFY_LEFT);
+        x += dayW;
+
+        x += doyGapPx;
+        dc.setColor(COLOR_LABEL, Graphics.COLOR_BLACK);
+        dc.drawText(x, y, dateFont, doyStr, Graphics.TEXT_JUSTIFY_LEFT);
 
         row += 1;
 
         // ---------- Row 3: time (white) ----------
  
         y = marginTop + row * rowH;
-        var timeStr = _fmt2(clock.hour) + ":" +
-                      _fmt2(clock.min) + ":" +
-                      _fmt2(clock.sec);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.drawText(w / 2, y, Graphics.FONT_LARGE, timeStr,
                     Graphics.TEXT_JUSTIFY_CENTER);
