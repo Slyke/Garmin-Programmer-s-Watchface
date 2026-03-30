@@ -1,0 +1,6 @@
+<properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+
+    <property id="LabelMode" type="number">4</property>
+    <property id="CalGoal"   type="number">500</property>
+    <property id="DistGoalM" type="number">8000</property>
+</properties>

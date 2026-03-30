@@ -1,0 +1,17 @@
+<settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+
+    <setting propertyKey="@Properties.LabelMode" title="@Strings.LabelModeTitle">
+        <settingConfig type="list">
+            <listEntry value="4">@Strings.LabelModeLong</listEntry>
+            <listEntry value="3">@Strings.LabelModeShort</listEntry>
+        </settingConfig>
+    </setting>
+
+    <setting propertyKey="@Properties.CalGoal" title="@Strings.CalGoalTitle">
+        <settingConfig type="numeric" min="0" max="20000" />
+    </setting>
+
+    <setting propertyKey="@Properties.DistGoalM" title="@Strings.DistGoalTitle">
+        <settingConfig type="numeric" min="0" max="200000" />
+    </setting>
+</settings>
